@@ -35,7 +35,6 @@ def control():
             speed = input("Enter your speed: ")
             distance = input("Enter your distance: ")
             control_msg.linear.x = speed
-            #speed*time=distance
             current_distance = 0
             t0 = rospy.Time.now().to_sec()#current time, float
             while (current_distance < distance):
