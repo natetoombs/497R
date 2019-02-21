@@ -17,7 +17,7 @@ from geometry_msgs.msg import Twist
 
 def control():
     rospy.init_node('turtle_control', anonymous = True)
-    control_publisher = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=10)
+    control_publisher = rospy.Publisher('/my_control_topic', Twist, queue_size=10)
     control_msg = Twist()
 
     control_msg.linear.x = 0
@@ -35,6 +35,7 @@ def control():
             speed = input("Enter your speed: ")
             distance = input("Enter your distance: ")
             control_msg.linear.x = speed
+            #speed*time=distance
             current_distance = 0
             t0 = rospy.Time.now().to_sec()#current time, float
             while (current_distance < distance):
@@ -43,6 +44,7 @@ def control():
                 current_distance = speed*(t1-t0)#v*dt = d
 
             control_msg.linear.x = 0
+            control_publisher.publish(control_msg)
             control_publisher.publish(control_msg)
 
         if cmd == 'turn':
@@ -58,6 +60,7 @@ def control():
                 current_angle = speed*(t1-t0)#v*dt = d
 
             control_msg.angular.z = 0
+            control_publisher.publish(control_msg)
             control_publisher.publish(control_msg)
 
         cmd = None
