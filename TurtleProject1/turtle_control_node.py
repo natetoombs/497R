@@ -4,16 +4,6 @@ import rospy
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist
 
-#cmd = 'nogo'
-
-#def callback(msg):
-#    x = msg
-#    rospy.loginfo(x)
-#    if x != 'Teleoperation':
-##        cmd = input("Enter Command: ")
-#    else:
-#        cmd = 'nogo'
-
 
 def control():
     rospy.init_node('turtle_control', anonymous = True)
@@ -64,9 +54,10 @@ def control():
             control_publisher.publish(control_msg)
 
         cmd = None
+        rospy.spin()
 
     #rospy.Subscriber("/cmd_vel_mux/active", String, callback)
-    #rospy.spin()
+
 
 if __name__ == '__main__':
         try:
