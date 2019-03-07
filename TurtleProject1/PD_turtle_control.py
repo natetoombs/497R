@@ -3,15 +3,6 @@
 import rospy
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import Geometry
-
-poscx = 0
-poscy = 0
-
-def callback(msg):
-	global poscx = msg.pose.pose.x
-	global poscy = msg.pose.pose.y
-	rospy.loginfo("x: {} y: {}", format(poscx,poscy))
 
 def control():
 	rospy.init_node('PD_turtle_control', anonymous = True)
@@ -25,10 +16,11 @@ def control():
 	control_msg.angular.y = 0
 	control_msg.angular.z = 0
 
-	control_subscriber = rospy.Subscriber("/odom", Odometry, callback)
+	control_subscriber = rospy.Subscriber()
 
 	while not rospy.is_shutdown():
-
+		poscx = 
+		poscy = 
 
 
 		#print("Your current position is: ")
@@ -36,3 +28,8 @@ def control():
 		#print(poscy)
 		posx = input("Give your desired 'x' coordinate: ")
 		posy = input("Give your desired 'y' coordinate: ")
+
+
+
+
+		

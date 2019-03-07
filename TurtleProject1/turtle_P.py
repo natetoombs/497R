@@ -21,12 +21,14 @@ class turtle_P(object):
         self.actual = None
         self.desired = None
 
-        self.kp_linear = .1
-        self.kp_angular = .2
+        self.kp_linear = 1
+        self.kp_angular = 3
 
-        self.max_ang = np.pi/20
-        self.rtol = 0.2
-        self.atol = 0.5
+        self.max_ang = np.pi/6
+        self.max_ang2 = np.pi/8
+
+        self.x_old = 0
+        self.z_old = 0
 
     def mocap_callback(self, msg):
         #This callback continually receives the MOCAP PoseStamped.
@@ -37,9 +39,13 @@ class turtle_P(object):
         pos_x = mocap_sub.pose.position.x
         pos_z = mocap_sub.pose.position.z
         #Orientation (quaternion)
+        # q_x = mocap_sub.pose.orientation.x
+        # q_y = mocap_sub.pose.orientation.y
+        # q_z = mocap_sub.pose.orientation.z
+        # q_w = mocap_sub.pose.orientation.w
         q_x = mocap_sub.pose.orientation.x
-        q_y = mocap_sub.pose.orientation.y
-        q_z = mocap_sub.pose.orientation.z
+        q_y = -mocap_sub.pose.orientation.z
+        q_z = mocap_sub.pose.orientation.y
         q_w = mocap_sub.pose.orientation.w
         quat = [q_x,q_y,q_z,q_w]
         #Quaternion to Euler orientation
@@ -48,6 +54,8 @@ class turtle_P(object):
         phi = RPY[2]
         #List of key things [x,z,phi]
         self.actual = [pos_x,pos_z,phi]
+        #print(self.actual)
+
 
     def input_callback(self, msg):
         #This callback will receive the desired position, then call the
@@ -61,7 +69,7 @@ class turtle_P(object):
         #List of key inputs [x_d,z_d]
         self.desired = [x_d,z_d]
         #call the calculation/publishing function
-        P_control()
+        self.P_control()
 
 
     def P_control(self):
@@ -75,8 +83,10 @@ class turtle_P(object):
         z_d = self.desired[1]
         x = self.actual[0]
         z = self.actual[1]
+        #start distance above threshold
+        dist = 100
         #Control Loop
-        while not np.allclose([x_d,z_d],[x,z],rtol=self.rtol,atol=self.atol):
+        while not dist<0.05:#np.allclose([x_d,z_d],[x,z],rtol=self.rtol,atol=self.atol):
             #Receive the desired position from input_callback
             x_d = self.desired[0]
             z_d = self.desired[1]
@@ -86,28 +96,43 @@ class turtle_P(object):
             phi = self.actual[2]
             #Calculate error in x,z Position
             x_err = x_d-x
-            z_err = z_d-z
+            z_err = -(z_d-z)
             #Calculate the desired angle from desired and actual position
-            phi_d = np.arctan((x_d-x)/(z_d-z))
-            if x_err > 0 and z_err < 0:
+            phi_d = np.arctan((z_err)/(x_err))
+            if z_err > 0 and x_err < 0:
                 phi_d += np.pi
-            elif x_err < 0 and z_err < 0:
+            elif z_err < 0 and x_err < 0:
                 phi_d -= np.pi
             #Calculate errors
             ang = phi_d-phi
             dist = distance(x_d,x,z_d,z)
             #Normalize angles
-            if ang > np.pi:
+            if abs(ang) >= np.pi:
                 ang = np.sign(ang)*(abs(ang)-2*np.pi)
+            print("phi_d: "+str(phi_d))
+            print(phi)
+            print(dist)
             #Implement the proportional controller; only drive forward if phi is
             #close to phi_d
             linear_speed = self.kp_linear*dist
-            angular_speed = self.kp_anglar*ang
+            if linear_speed > .8:
+                linear_speed = .8
+            #angular speed and max value to control_msg
+            angular_speed = self.kp_angular*ang
+            if angular_speed > 1.3:
+                angular_speed = 1.3
             control_msg.angular.z = angular_speed
-            if ang <= self.max_ang:
-                control_msg.linear.x = linear_speed
+            #prevents the turtlebot from driving forward until it is facing close
+            #to phi_d, separated by self.max_ang.
+            if abs(ang) <= self.max_ang:
+                if abs(ang) >= self.max_ang2:
+                    control_msg.linear.x = linear_speed*(1-abs(ang))
+                else:
+                    control_msg.linear.x = linear_speed
             else:
                 control_msg.linear.x = 0
+            #record previous value of x
+            self.x_old = control_msg.linear.x
             #Publish control_msg
             self.pub.publish(control_msg)
 
@@ -121,7 +146,7 @@ def main():
     turtleP = turtle_P(pub)
 
     while not rospy.is_shutdown():
-        mocap_sub = rospy.Subscriber("", PoseStamped, turtleP.mocap_callback)
+        mocap_sub = rospy.Subscriber("/vrpn_client_node/Raph/pose", PoseStamped, turtleP.mocap_callback)
         input_sub = rospy.Subscriber("/my_input_topic", PoseStamped, turtleP.input_callback)
         rospy.spin()
 
