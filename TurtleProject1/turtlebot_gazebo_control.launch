@@ -1,0 +1,11 @@
+<launch>
+
+  <node name="demux_node" pkg="turtle_control" type="demux_node.py"/>
+
+  <node name="turtle_P_gazebo" pkg="turtle_control" type="turtle_P_gazebo.py" output="screen" launch-prefix="xterm -e"/>
+
+  <node name="input_node" pkg="turtle_control" type="input_node.py" output="screen" launch-prefix="xterm -e"/>
+
+  <!--<include file="$(find pkg-name)/path/filename.xml"/>-->
+
+</launch>
