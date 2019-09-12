@@ -11,7 +11,7 @@ def distance(x1,x2,z1,z2):
     zd = z2-z1
     return np.sqrt(xd*xd+zd*zd)
 
-class turtle_Path(object):
+class turtle_Orbit(object):
 
     def __init__(self, pub):
         self.pub = pub
@@ -21,25 +21,27 @@ class turtle_Path(object):
         self.actual = None
         self.desired = None
 
-        self.kp_linear = .4
+        self.kp_linear = 1
         self.kp_angular = 3
 
         self.max_ang = np.pi/6
-        self.max_ang2 = np.pi/8
+        self.max_ang2 = np.pi/12
 
-        self.linmax = .5
-        self.angmax = 1.2
-
-        self.Xinf = -np.pi/2.2#Not sure why, I made this and Kq negative!
-        self.kpath = 1
-
-        self.x_old = 0
-        self.z_old = 0
+        self.linmax = 0.4
+        self.angmax = 1.0
 
         self.linear_prev = 0
         self.angular_prev = 0
-        self.linaccel = 0.001
-        self.angaccel = 0.01
+        self.linaccel = 0.05
+        self.angaccel = 0.05
+
+        self.Rmin = 0.05
+        self.Rorbit = .8
+        self.korbit = 2#np.pi/2*self.Rmin
+        self.lambd = -1
+
+        self.x_old = 0
+        self.z_old = 0
 
     def mocap_callback(self, msg):
         #This callback continually receives the MOCAP PoseStamped.
@@ -62,9 +64,9 @@ class turtle_Path(object):
         #Quaternion to Euler orientation
         RPY = tf.transformations.euler_from_quaternion(quat)
         #output in RPY, or phi,theta,psi ******** THINK IT'S 2, MAYBE 0
-        phi = RPY[2]
-        #List of key things [x,z,phi]
-        self.actual = [pos_x,pos_z,phi]
+        kai = RPY[2]
+        #List of key things [x,z,kai]
+        self.actual = [pos_x,pos_z,kai]
         #print(self.actual)
 
 
@@ -87,10 +89,10 @@ class turtle_Path(object):
         #List of key inputs [x_d,z_d]
         self.inputs = [x_d,z_d]#can include r_x,r_z
         #call the calculation/publishing function
-        self.Path_control()
+        self.Orbit_control()
 
 
-    def Path_control(self):
+    def Orbit_control(self):
         #This function will apply proportional contol and call a twist to be
         #published. It runs a loop that updates the actual position and moves
         #the turtlebot until it is (very) near that position. It will not drive
@@ -99,89 +101,57 @@ class turtle_Path(object):
         #Initialize values of x_d,z_d,x,z for loop
         x_d = self.inputs[0]
         z_d = self.inputs[1]
-        #r_x = self.inputs[2]
-        #r_z = self.inputs[3]
-        #for determining r:
-        r_zs = [4,0,-4]
-        r_xs = [3.5,0,-3.5]
-        if x_d > 0:
-            r_x = r_xs[2]
-        elif x_d == 0:
-            r_x = r_xs[1]
-        else:
-            r_x = r_xs[0]
-        if z_d > 0:
-            r_z = r_zs[2]
-        elif z_d == 0:
-            if r_x == 0:
-                r_x = r_xs[2]
-            r_z = r_zs[1]
-        else:
-            r_z = r_zs[0]
-
         x = self.actual[0]
         z = self.actual[1]
-        #calculate vector q as q_north, q_east
-        q_n = x_d-r_x
-        q_e = z_d-r_z
         #start distance above threshold
         dist = 100
         #Control Loop
-        while not dist<0.1:#np.allclose([x_d,z_d],[x,z],rtol=self.rtol,atol=self.atol):
+        while not dist<0.3:#np.allclose([x_d,z_d],[x,z],rtol=self.rtol,atol=self.atol):
             #Receive the desired position and starting path point from
             #input_callback (in case we want to update mid "flight")
             x_d = self.inputs[0]
             z_d = self.inputs[1]
-            #r_x = self.inputs[2]
-            #r_z = self.inputs[3]
-            q_n = x_d-r_x
-            q_e = z_d-r_z
+
             #Receive the actual position/orientation from mocap_callback
             x = self.actual[0]
             z = self.actual[1]
-            phi = self.actual[2]
+            kai = self.actual[2]
             #Calculate error in x,z Position
-            x_err = x_d-x
-            z_err = -(z_d-z)
-            # Calculate the desired angle from desired and actual position
-            # phi_d = np.arctan((z_err)/(x_err))
-            # if z_err > 0 and x_err < 0:
-            #     phi_d += np.pi
-            # elif z_err < 0 and x_err < 0:
-            #     phi_d -= np.pi
-            # #Calculate errors
-            # ang = phi_d-phi
-            #Calculate path angle
-            Xq = np.arctan2(q_e,q_n)
-            #Calculate ep; x = north position, z = east position
-            epn = x - r_x
-            epe = z - r_z
-            #Calculate epy
-            epy = -np.sin(Xq)*epn + np.cos(Xq)*epe
-            #Calculate Xc, o sea, phi_d
-            Xc = -Xq - self.Xinf*2/np.pi*np.arctan(self.kpath*epy)
+            x_err = -(x_d-x)
+            z_err = (z_d-z)#^^^^^Watch for the negative
+            #Calculate phi
+            phi = np.arctan(z_err/x_err)
+            # if phi-kai<-np.pi:
+            #     phi += 2*np.pi
+            # elif phi-kai>np.pi:
+            #     phi -= 2*np.pi
+            if z_err > 0 and x_err < 0:
+                phi += np.pi
+            elif z_err < 0 and x_err < 0:
+                phi -= np.pi
+            dist = distance(x_d,x,z_d,z)
+            #Calculate Xc, o sea, kai_d
+            Xc = phi + self.lambd*(np.pi/2+np.arctan(self.korbit*((dist-self.Rorbit)/self.Rorbit)))
             #####^^^^^Not sure why, Xq and self.Xinf(at top) are negative
-            ang = Xc - phi
+            ang = Xc - kai
             #Normalize angle ****************CHECK THIS
             if abs(ang) >= np.pi:
                 ang = np.sign(ang)*(abs(ang)-2*np.pi)
             dist = distance(x_d,x,z_d,z)
-            # print("Xc: "+str(Xc))
-            # print("phi: "+str(phi))
             # print("dist: "+str(dist))
-            # print("Epy: "+str(epy))
+            # print("Xc: "+str(Xc))
+            # print("kai: "+str(kai))
+            # print("Phi: "+str(phi))
             #Implement the proportional controller; only drive forward if phi is
             #close to phi_d
             #Use a low-pass filter to make it accelerate more slowly
-            linear_speed = self.linaccel*self.kp_linear*dist + (1-self.linaccel)*self.linear_prev
+            linear_speed = self.kp_linear*dist
             if linear_speed > self.linmax:
                 linear_speed = self.linmax
-            self.linear_prev = linear_speed
             #angular speed and max value to control_msg
-            angular_speed = self.angaccel*self.kp_angular*ang + (1-self.angaccel)*self.angular_prev
+            angular_speed = self.kp_angular*ang
             if angular_speed > self.angmax:
                 angular_speed = self.angmax
-            self.angular_prev = angular_speed
             control_msg.angular.z = angular_speed
             #prevents the turtlebot from driving forward until it is facing close
             #to phi_d, separated by self.max_ang.
@@ -199,16 +169,12 @@ class turtle_Path(object):
 
         #Reset control_msg to 0
         self.pub.publish(Twist())
-        #reset _prev's to 0
-        self.linear_prev = 0
-        self.angular_prev = 0
-
 
 
 def main():
     rospy.init_node('turtle_Path', anonymous = True)
     pub = rospy.Publisher('/my_control_topic', Twist, queue_size=10)
-    turtleP = turtle_Path(pub)
+    turtleP = turtle_Orbit(pub)
 
     while not rospy.is_shutdown():
         mocap_sub = rospy.Subscriber("/vrpn_client_node/Raph/pose", PoseStamped, turtleP.mocap_callback)
