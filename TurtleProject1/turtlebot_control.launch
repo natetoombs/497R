@@ -1,5 +1,0 @@
-<launch>
-
-  <node name="demux_node" pkg="turtle_control" type="demux_node.py"/>
-
-</launch>
